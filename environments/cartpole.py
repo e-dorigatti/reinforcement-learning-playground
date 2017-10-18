@@ -74,7 +74,7 @@ def plot(time, positions, angles):
     plt.show()
 
 
-class BangBangCartPoleEnvironment(Environment):
+class BaseCartPoleEnvironment(Environment):
     @save_args
     def __init__(self, force_factor=5, initial_theta=0.0001, max_offset=3, max_angle=0.25):
         self.norm_x = Normalizer(-max_offset, max_offset)
@@ -92,7 +92,7 @@ class BangBangCartPoleEnvironment(Environment):
 
     @property
     def action_size(self):
-        return 3
+        raise NotImplementedError()
     
     @property
     def state(self):
@@ -107,7 +107,7 @@ class BangBangCartPoleEnvironment(Environment):
         if self.is_terminal:
             return -10
         else:
-            return -0.005 * abs(self.pendulum.theta) - 0.001 * abs(self.pendulum.x)
+            return 0.005 * (1 - abs(self.pendulum.theta)) + 0.001 * (1 - abs(self.pendulum.x))
 
     @property
     def is_terminal(self):
@@ -118,13 +118,37 @@ class BangBangCartPoleEnvironment(Environment):
             not self.norm_thetadot.is_inside(self.pendulum.thetadot)
         )
 
-    def apply_action(self, action_distribution):
+    @staticmethod
+    def _get_force(action):
+        raise NotImplementedError()
+
+    def apply_action(self, action):
         if self.is_terminal:
             raise RuntimeError('environment is in terminal state; cannot proceed further')
 
-        act = np.random.choice([-1, 0, 1], p=action_distribution)
+        act = self._get_force(action)
         self.pendulum.step_simulate(self.force_factor * act)
         return self.is_terminal, self.state, self._get_reward()
+
+
+class BangBangCartPoleEnvironment(BaseCartPoleEnvironment):
+    @property
+    def action_size(self):
+        return 3
+
+    @staticmethod
+    def _get_force(action):
+        return np.random.choice([-1, 0, 1], p=action)
+
+
+class ContinuousCartPoleEnvironment(BaseCartPoleEnvironment):
+    @property
+    def action_size(self):
+        return 1
+
+    @staticmethod
+    def _get_force(action):
+        return min(max(action[0], -1), 1)
 
 
 def drop_test():

@@ -5,9 +5,9 @@ from collections import deque
 import random
 
 
-def make_weights(rows, cols):
-    weights = tf.Variable(tf.random_uniform([rows, cols], -0.001, 0.001))
-    bias = tf.Variable(tf.constant(np.random.random(), shape=[1, cols]))
+def make_weights(rows, cols, mag=0.001):
+    weights = tf.Variable(tf.random_uniform([rows, cols], -mag, mag))
+    bias = tf.Variable(tf.constant(mag * (2 * np.random.random() - 1), shape=[1, cols]))
     return weights, bias
 
 
@@ -67,3 +67,23 @@ class KMostRecent:
 
     def is_full(self):
         return len(self.buffer) == self.max_size
+
+
+class OrnsteinUhlenbeckProcess:
+    # https://en.wikipedia.org/wiki/Ornstein%E2%80%93Uhlenbeck_process
+    # implemented as detailed in https://math.stackexchange.com/a/1288406/99169
+    def __init__(self, theta, mu, sigma, x0, dt):
+        self.theta = theta
+        self.mu = mu
+        self.sigma = sigma
+        self.x0 = x0
+        self.dt = dt
+        self.n = 0
+        self.last = self.x0
+
+    def get_noise(self):
+        self.last += (
+            self.theta * (self.mu - self.last) * self.dt
+            + self.sigma * np.sqrt(self.dt) * np.random.normal()
+        )
+        return self.last

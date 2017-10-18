@@ -12,10 +12,10 @@ def main():
         discount_factor=0.99,
         target_network_track=0.001,
         regularization_coeff=0.001,
-        learning_rate=0.001,
-        hidden_state_size=128,
-        hidden_size=64,
-        random_action_decay=0.002,
+        learning_rate=0.01,
+        hidden_state_size=64,
+        hidden_size=32,
+        random_action_decay=0.001,
         replay_buffer_size=1000000,
         batch_size=32
     )
@@ -33,7 +33,7 @@ def main():
         device_count={'GPU': 0}
     )
 
-    task.run_episodes(10000)
+    task.run_episodes(100000)
 
 
 if __name__ == '__main__':

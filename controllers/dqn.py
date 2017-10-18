@@ -188,6 +188,11 @@ class QNetworkController(Controller):
             np.sum, [self.rewards, self.losses]
         ))
 
+        print('Episode %d - LEN: %d\tRND: %.3f\tLOS: %.3f\tAR: %.3f\tSR: %.3f\tAQ: %.3f' % (
+            self.episode_number, sv['steps'], sv['rnd'], sv['avg_loss'], sv['avg_reward'],
+            sv['sum_reward'], sv['avg_q'],
+        ))
+
         for k, v in sv.items():
             summary.value.add(tag=k, simple_value=v)
 
@@ -199,7 +204,6 @@ class QNetworkController(Controller):
             for i, (state, action) in enumerate(zip(self.states, self.actions)):
                 f.write(str(i) + ';' + ';'.join('%f' % x for x in tuple(state) + tuple(action)) + '\n')
 
-        print('Episode %d - LEN: %d\tRND: %.3f\tLOS: %.3f\tAR: %.3f\tSR: %.3f\tAQ: %.3f' % (
-            self.episode_number, sv['steps'], sv['rnd'], sv['avg_loss'], sv['avg_reward'],
-            sv['sum_reward'], sv['avg_q'],
-        ))
+        if self.episode_number % 50 == 0:
+            saver = tf.train.Saver(self.network.target_network_params)
+            saver.save(tf.get_default_session(), 'logs/dqn', global_step=self.episode_number)

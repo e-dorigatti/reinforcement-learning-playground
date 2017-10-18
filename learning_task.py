@@ -68,7 +68,7 @@ class LearningTask:
             if terminal:
                 break
 
-        self.controller.episode_end(state, self.episode_number, terminal)
+        self.controller.episode_end(self.episode_number, state, terminal)
 
     def run_episodes(self, count):
         for _ in range(count):
@@ -77,12 +77,12 @@ class LearningTask:
 
 class TensorflowLearningTask(LearningTask):
     def __init__(self, controller, environment, episode_length, **tf_config):
+        self.session = None
+        self.tf_config = tf_config
+
         super(TensorflowLearningTask, self).__init__(
             controller, environment, episode_length
         )
-
-        self.tf_config = tf_config
-        self.session = None
 
     def do_episode(self):
         init = False
