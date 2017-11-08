@@ -3,7 +3,7 @@ import numpy as np
 from math import sin, cos, pi
 from utils import save_args
 import matplotlib.pyplot as plt
-from learning_task import Environment
+from learning_task import Environment, LifeGoal
 from utils import Normalizer
 
 
@@ -48,41 +48,18 @@ class PendulumDynamics:
         return self.x, self.xdot, self.theta, self.thetadot
 
 
-def to_deg(rad):
-    return rad*180/pi
-
-
-def plot(time, positions, angles):
-    plt.figure()
-    plt.subplot(1, 2, 1)
-    plt.title('Cart position')
-    plt.plot(time, [x for x, xdot in positions], label='Position (m)')
-    plt.plot(time, [xdot for x, xdot in positions], label='Accelaration(m/s^2)')
-    plt.xlabel('Time (s)')
-    plt.grid()
-    plt.legend()
-
-    plt.subplot(1, 2, 2)
-    plt.title('Cart angle')
-    plt.plot(time, [tdot for t, tdot in angles], label='Angle variation (deg/s)')
-    plt.plot(time, [t for t, tdot in angles], label='Angle (deg)')
-    plt.plot([0, time[-1]], [180, 180], color='gray', linestyle='--')
-    plt.xlabel('Time (s)')
-    plt.grid()
-    plt.legend()
-
-    plt.show()
-
-
 class BaseCartPoleEnvironment(Environment):
     @save_args
-    def __init__(self, force_factor=5, initial_theta=0.0001, max_offset=3, max_angle=0.25):
+    def __init__(self, force_factor=5, initial_theta=0.0001,
+                 max_offset=3, max_angle=0.25):
+        super(BaseCartPoleEnvironment, self).__init__(number_of_agents=1)
+
         self.norm_x = Normalizer(-max_offset, max_offset)
         self.norm_xdot = Normalizer(-10, 10)
         self.norm_theta = Normalizer(-max_angle, max_angle)
         self.norm_thetadot = Normalizer(-10, 10)
         self.reset()
-    
+
     def reset(self):
         self.pendulum = PendulumDynamics(0, 0, self.initial_theta, 0)
 
@@ -93,7 +70,7 @@ class BaseCartPoleEnvironment(Environment):
     @property
     def action_size(self):
         raise NotImplementedError()
-    
+
     @property
     def state(self):
         return (
@@ -103,18 +80,21 @@ class BaseCartPoleEnvironment(Environment):
             self.norm_thetadot(self.pendulum.thetadot),
         )
 
-    def _get_reward(self):
-        if self.is_terminal:
-            return -10
-        else:
-            return 0.005 * (1 - abs(self.pendulum.theta)) + 0.001 * (1 - abs(self.pendulum.x))
+    def denormalize_state(self, state):
+        x, xdot, theta, thetadot = state
+        return (
+            self.norm_x.denormalize(x),
+            self.norm_xdot.denormalize(xdot),
+            self.norm_theta.denormalize(theta),
+            self.norm_thetadot.denormalize(thetadot),
+        )
 
     @property
     def is_terminal(self):
         return (
-            not self.norm_x.is_inside(self.pendulum.x) or 
-            not self.norm_xdot.is_inside(self.pendulum.xdot) or 
-            not self.norm_theta.is_inside(self.pendulum.theta) or 
+            not self.norm_x.is_inside(self.pendulum.x) or
+            not self.norm_xdot.is_inside(self.pendulum.xdot) or
+            not self.norm_theta.is_inside(self.pendulum.theta) or
             not self.norm_thetadot.is_inside(self.pendulum.thetadot)
         )
 
@@ -128,7 +108,7 @@ class BaseCartPoleEnvironment(Environment):
 
         act = self._get_force(action)
         self.pendulum.step_simulate(self.force_factor * act)
-        return self.is_terminal, self.state, self._get_reward()
+        return self.is_terminal, self.state
 
 
 class BangBangCartPoleEnvironment(BaseCartPoleEnvironment):
@@ -138,7 +118,8 @@ class BangBangCartPoleEnvironment(BaseCartPoleEnvironment):
 
     @staticmethod
     def _get_force(action):
-        return np.random.choice([-1, 0, 1], p=action)
+        idx = np.argmax(action)
+        return idx - 1
 
 
 class ContinuousCartPoleEnvironment(BaseCartPoleEnvironment):
@@ -151,39 +132,10 @@ class ContinuousCartPoleEnvironment(BaseCartPoleEnvironment):
         return min(max(action[0], -1), 1)
 
 
-def drop_test():
-    print('simple drop test, do the plots look realistic?')
-
-    cart = PendulumDynamics(0, 0, 0.05, 0)
-
-    time = [x * cart.dt for x in range(250)]
-    positions, angles = [], []
-    for i in time:
-        positions.append((cart.x, cart.xdot))
-        angles.append((to_deg(cart.theta), to_deg(cart.thetadot)))
-
-        cart.step_simulate(0)
-
-    plot(time, positions, angles)
-
-
-def balance_test():
-    print('trying to balance the thing...')
-
-    cart = PendulumDynamics(0, 0, 0.05, 0)
-
-    time = [x * cart.dt for x in range(250)]
-    positions, angles = [], []
-    for i in time:
-        positions.append((cart.x, cart.xdot))
-        angles.append((to_deg(cart.theta), to_deg(cart.thetadot)))
-
-        force = cart.theta * -70
-        cart.step_simulate(force)
-
-    plot(time, positions, angles)
-
-
-if __name__ == '__main__':
-    drop_test()
-    balance_test()
+class CartPoleBalanceGoal(LifeGoal):
+    def get_reward_for_agent(self, agent, prev_state, action, state):
+        if state is None:
+            return -10
+        else:
+            x, _, theta, _ = self.environment.denormalize_state(state)
+            return 0.005 * (1 - abs(theta)) + 0.001 * (1 - abs(x))

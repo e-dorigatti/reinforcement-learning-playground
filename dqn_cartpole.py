@@ -1,14 +1,14 @@
 import os
-from controllers.dqn import QNetworkController
-from environments.cartpole import BangBangCartPoleEnvironment
-from learning_task import TensorflowLearningTask
+from agents.dqn import QNetworkAgent
+from environments.cartpole import BangBangCartPoleEnvironment, CartPoleBalanceGoal
+from learning_task import TaskWithTensorflow, LearningTask
 
 
 def main():
     for f in os.listdir('logs'):
         os.remove('logs/' + f)
 
-    controller = QNetworkController(
+    agent = QNetworkAgent(
         discount_factor=0.99,
         target_network_track=0.001,
         regularization_coeff=0.001,
@@ -27,9 +27,13 @@ def main():
         max_angle=0.25
     )
 
-    task = TensorflowLearningTask(
-        controller, environment,
-        episode_length=500,
+    task = TaskWithTensorflow(
+        LearningTask(
+            environment,
+            CartPoleBalanceGoal(environment),
+            [agent],
+            episode_length=500
+        ),
         device_count={'GPU': 0}
     )
 

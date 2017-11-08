@@ -1,6 +1,6 @@
 from utils import make_weights, compute_next_layer, KMostRecent, save_args
 import numpy as np
-from learning_task import Controller
+from learning_task import Agent
 import tensorflow as tf
 
 
@@ -40,7 +40,7 @@ class QNetwork:
             self.nnet_input_state: in_states,
             self.nnet_input_action: in_actions
         })
-    
+
     def learn(self, states, actions, outputs):
         _, loss_value = self.session.run([self.optimizer, self.loss], feed_dict={
             self.nnet_input_state: states,
@@ -68,24 +68,25 @@ class QNetwork:
             shape=[None, 1], dtype=tf.float32, name='nnet_label'
         )
 
-        self.weights_1, self.bias_1 = make_weights(self.state_size, self.hidden_state_size)
-        self.hidden_state_1 = compute_next_layer(self.nnet_input_state, self.weights_1, self.bias_1)
+        weights_1, bias_1 = make_weights(self.state_size, self.hidden_state_size)
+        hidden_state_1 = compute_next_layer(self.nnet_input_state, weights_1, bias_1)
 
-        self.weights_2, self.bias_2 = make_weights(self.hidden_state_size, self.hidden_size)
-        self.hidden_state_2 = compute_next_layer(self.hidden_state_1, self.weights_2, self.bias_2)
+        weights_2, bias_2 = make_weights(self.hidden_state_size, self.hidden_size)
+        hidden_state_2 = compute_next_layer(hidden_state_1, weights_2, bias_2)
 
-        self.weights_3, self.bias_3 = make_weights(self.action_size, self.hidden_size)
-        self.hidden_action = compute_next_layer(self.nnet_input_action, self.weights_3, self.bias_3)
+        weights_3, bias_3 = make_weights(self.action_size, self.hidden_size)
+        hidden_action = compute_next_layer(self.nnet_input_action, weights_3, bias_3)
 
-        self.bias_5 = tf.Variable(tf.constant(0.1, shape=[self.hidden_size]))
-        self.hidden_combined = tf.nn.relu(self.hidden_state_2 + self.hidden_action + self.bias_5)
+        bias_5 = tf.Variable(tf.constant(0.1, shape=[self.hidden_size]))
+        hidden_combined = tf.nn.relu(hidden_state_2 + hidden_action + bias_5)
 
-        self.weights_4, self.bias_4 = make_weights(self.hidden_size, 1)
-        self.output = compute_next_layer(self.hidden_combined, self.weights_4, self.bias_4, activation=None)
+        weights_4, bias_4 = make_weights(self.hidden_size, 1)
+        self.output = compute_next_layer(hidden_combined, weights_4, bias_4,
+                                         activation=None)
 
-        self.network_params = [self.weights_1, self.bias_1, self.weights_2,
-                               self.bias_2, self.weights_3, self.bias_3,
-                               self.weights_4, self.bias_4, self.bias_5]
+        self.network_params = [weights_1, bias_1, weights_2,
+                               bias_2, weights_3, bias_3,
+                               weights_4, bias_4, bias_5]
 
         self.squared_error = (self.nnet_label - self.output)**2
         self.loss = tf.reduce_mean(self.squared_error) + self.regularization_coeff * sum(
@@ -103,19 +104,29 @@ class QNetwork:
         ]
 
         (
-            self.target_weights_1, self.target_bias_1, self.target_weights_2,
-            self.target_bias_2, self.target_weights_3, self.target_bias_3,
-            self.target_weights_4, self.target_bias_4, self.target_bias_5
+            target_weights_1, target_bias_1, target_weights_2,
+            target_bias_2, target_weights_3, target_bias_3,
+            target_weights_4, target_bias_4, target_bias_5
         ) = self.target_network_params
 
-        self.target_hidden_state_1 = compute_next_layer(self.nnet_input_state, self.target_weights_1, self.target_bias_1)
-        self.target_hidden_state_2 = compute_next_layer(self.target_hidden_state_1, self.target_weights_2, self.target_bias_2)
-        self.target_hidden_action = compute_next_layer(self.nnet_input_action, self.target_weights_3, self.target_bias_3)
-        self.target_hidden_combined = tf.nn.relu(self.target_hidden_state_2 + self.target_hidden_action + self.target_bias_5)
-        self.target_output = compute_next_layer(self.target_hidden_combined, self.target_weights_4, self.target_bias_4, activation=None)
+        target_hidden_1 = compute_next_layer(
+            self.nnet_input_state, target_weights_1, target_bias_1
+        )
+        target_hidden_2 = compute_next_layer(
+            target_hidden_1, target_weights_2, target_bias_2
+        )
+        target_hidden_action = compute_next_layer(
+            self.nnet_input_action, target_weights_3, target_bias_3
+        )
+        target_hidden_combined = tf.nn.relu(
+            target_hidden_2 + target_hidden_action + target_bias_5
+        )
+        self.target_output = compute_next_layer(
+            target_hidden_combined, target_weights_4, target_bias_4, activation=None
+        )
 
 
-class QNetworkController(Controller):
+class QNetworkAgent(Agent):
     @save_args
     def __init__(self, discount_factor, target_network_track, regularization_coeff,
                  learning_rate, hidden_state_size, hidden_size, random_action_decay,
@@ -129,7 +140,7 @@ class QNetworkController(Controller):
                                 self.regularization_coeff, self.learning_rate,
                                 self.hidden_state_size, self.hidden_size)
         self.network.build()
-    
+
     def episode_start(self, episode_number, state):
         self.episode_number = episode_number
         self.losses, self.rewards, self.qs, self.states, self.actions = [], [], [], [], []
@@ -146,7 +157,7 @@ class QNetworkController(Controller):
             self.qs.append(np.max(q_v))
             return action
 
-    def action_performed(self, state, action, reward, next_state, terminal):
+    def after_my_action(self, state, action, reward, next_state, terminal):
         self.replay_buffer.add((state, action, reward, next_state, terminal))
         self.rewards.append(reward)
         self.states.append(state)
@@ -157,14 +168,14 @@ class QNetworkController(Controller):
             batch_states, batch_actions, batch_rewards,
             batch_next_states, batch_terminal
         ) = zip(*batch_replay)
-    
-        next_q = self.network.get_q_values_from_target(batch_next_states)        
+
+        next_q = self.network.get_q_values_from_target(batch_next_states)
         batch_inputs_state, batch_inputs_action, batch_outputs = [], [], []
         for i, (_, _, reward, _, end) in enumerate(batch_replay):
-            consider_future = 0 if end else 1
-            batch_outputs.append([reward + consider_future * self.discount_factor * np.max(
-                [next_q[self.action_size * i + j][0] for j in range(self.action_size)]
-            )])
+            max_future_q = np.max([
+                next_q[self.action_size * i + j][0] for j in range(self.action_size)
+            ]) if not end else 0
+            batch_outputs.append([reward + self.discount_factor * max_future_q])
 
         loss = self.network.learn(batch_states, batch_actions, batch_outputs)
         self.network.update_target_network()

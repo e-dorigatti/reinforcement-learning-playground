@@ -5,7 +5,7 @@ from collections import deque
 import random
 
 
-def make_weights(rows, cols, mag=0.001):
+def make_weights(rows, cols, mag=0.1):
     weights = tf.Variable(tf.random_uniform([rows, cols], -mag, mag))
     bias = tf.Variable(tf.constant(mag * (2 * np.random.random() - 1), shape=[1, cols]))
     return weights, bias
@@ -53,7 +53,7 @@ class KMostRecent:
     @save_args
     def __init__(self, max_size):
         self.buffer = deque()
-    
+
     def add(self, thing):
         self.buffer.appendleft(thing)
         if len(self.buffer) > self.max_size:
@@ -87,3 +87,13 @@ class OrnsteinUhlenbeckProcess:
             + self.sigma * np.sqrt(self.dt) * np.random.normal()
         )
         return self.last
+
+class MultidimensionalOrnsteinUhlenbeckProcess:
+    def __init__(self, count, theta, mu, sigma, x0, dt):
+        self.noise_processes = [
+            OrnsteinUhlenbeckProcess(theta, mu, sigma, x0, dt)
+            for _ in range(count)
+        ]
+
+    def get_noise(self):
+        return [p.get_noise() for p in self.noise_processes]
