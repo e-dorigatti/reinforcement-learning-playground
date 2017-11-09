@@ -184,7 +184,7 @@ class QNetworkAgent(Agent):
         self.losses.append(loss)
         return loss
 
-    def episode_end(self, episode_number, state, terminal):
+    def episode_end(self, episode_number, state, terminal, reward):
         summary = tf.Summary()
 
         sv = {

@@ -32,7 +32,8 @@ def main():
             environment,
             CartPoleBalanceGoal(environment),
             [agent],
-            episode_length=500
+            episode_length=500,
+            randomize_agents_order=True,
         ),
         device_count={'GPU': 0}
     )

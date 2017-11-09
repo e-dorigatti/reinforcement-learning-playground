@@ -52,16 +52,18 @@ class BaseCartPoleEnvironment(Environment):
     @save_args
     def __init__(self, force_factor=5, initial_theta=0.0001,
                  max_offset=3, max_angle=0.25):
-        super(BaseCartPoleEnvironment, self).__init__(number_of_agents=1)
-
         self.norm_x = Normalizer(-max_offset, max_offset)
         self.norm_xdot = Normalizer(-10, 10)
         self.norm_theta = Normalizer(-max_angle, max_angle)
         self.norm_thetadot = Normalizer(-10, 10)
         self.reset()
 
-    def reset(self):
+    def reset(self, agent_ids=None):
         self.pendulum = PendulumDynamics(0, 0, self.initial_theta, 0)
+
+    @property
+    def number_of_agents(self):
+        return 1
 
     @property
     def state_size(self):
@@ -102,10 +104,7 @@ class BaseCartPoleEnvironment(Environment):
     def _get_force(action):
         raise NotImplementedError()
 
-    def apply_action(self, action):
-        if self.is_terminal:
-            raise RuntimeError('environment is in terminal state; cannot proceed further')
-
+    def apply_action(self, agent, action):
         act = self._get_force(action)
         self.pendulum.step_simulate(self.force_factor * act)
         return self.is_terminal, self.state
@@ -134,6 +133,12 @@ class ContinuousCartPoleEnvironment(BaseCartPoleEnvironment):
 
 class CartPoleBalanceGoal(LifeGoal):
     def get_reward_for_agent(self, agent, prev_state, action, state):
+        return self._get_reward(state)
+
+    def get_end_reward_for_agent(self, agent, final_state, terminal):
+        return self._get_reward(final_state)
+
+    def _get_reward(self, state):
         if state is None:
             return -10
         else:

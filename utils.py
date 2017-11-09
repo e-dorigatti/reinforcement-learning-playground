@@ -19,6 +19,7 @@ def compute_next_layer(input_layer, weights, bias, activation=tf.nn.relu):
 
 def save_args(init):
     def save(*args, **kwargs):
+        # FIXME handle non-specified arguments with a default value
         bound = inspect.signature(init).bind(*args, **kwargs).arguments
         instance = None
         for k, v in bound.items():
